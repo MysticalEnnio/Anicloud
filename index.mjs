@@ -1,30 +1,30 @@
-import fetch from "node-fetch";
+import fetch from "sync-fetch";
 import cheerio from "cheerio";
-
-let animeToFetch = "https://anicloud.io/anime/stream/hunter-x-hunter/staffel-2";
+import cliProgress from "cli-progress";
+import fs from "fs";
 
 function getEpisodeIds(href) {
-  return fetch(href)
-    .then((response) => response.text())
-    .then((data) => {
-      const $ = cheerio.load(data);
+  let fetchData = fetch(href).text();
+  const $ = cheerio.load(fetchData);
 
-      let episodeListDOM = $(".hosterSiteDirectNav")
-        .children("ul")
-        .eq(1)
-        .children()
-        .slice(1);
-      let episodeIds = [];
+  let episodeListDOM = $(".hosterSiteDirectNav")
+    .children("ul")
+    .eq(1)
+    .children()
+    .slice(1);
+  let episodeIds = [];
 
-      episodeListDOM.each(function () {
-        episodeIds.push($(this).children().first().attr("data-episode-id"));
-      });
-      return episodeIds;
-    });
+  episodeListDOM.each(function () {
+    episodeIds.push($(this).children().first().attr("data-episode-id"));
+  });
+
+  fs.writeFileSync("json/episodeIds.json", JSON.stringify(episodeIds));
+
+  return episodeIds;
 }
 
 function setEpisodeSeen(id) {
-  fetch("https://anicloud.io/ajax/lastseen", {
+  return fetch("https://anicloud.io/ajax/lastseen", {
     headers: {
       accept: "*/*",
       "accept-language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -40,77 +40,108 @@ function setEpisodeSeen(id) {
       cookie:
         "__ddg1=IBRP71KbFqeuMdVsAEmH; anicloud_session=67fvk5visfl3lmk0eo6h773aef; SLG_G_WPT_TO=de; SLG_GWPT_Show_Hide_tmp=1; _ym_d=1645711985; _ym_uid=1645711985293007302; rememberLogin=yo4uuAZIvAO7E0nw85o0SJXDvyD4GlzgedBgnW9FQUUolIQC6UJa5kKiyAHolK540ZaToWmdF2NmAYKUfrdCrUMPf4W6ztjzodvubmhwRw2iR7O31pJ1H1u4; SLG_wptGlobTipTmp=1; __ddg1_=kqFl7XgLRhReX7DW7SCb; _ym_isad=2",
       Referer:
-        "https://anicloud.io/anime/stream/fantasia-sango-realm-of-legends/staffel-1/episode-1",
+        "https://anicloud.io/anime/stream/no-game-no-life/staffel-1/episode-1",
       "Referrer-Policy": "strict-origin-when-cross-origin",
     },
     body: "episode=" + id,
     method: "POST",
-  })
-    .then((response) => response.json())
-    .then((data) => {
-      console.log(data);
-    });
+  }).json();
+}
+
+function getAllAnimeSeasons(href) {
+  let fetchData = fetch(href).text();
+  const $ = cheerio.load(fetchData);
+
+  let seasonContainer = $(".hosterSiteDirectNav")
+    .children()
+    .first()
+    .children()
+    .slice(1);
+
+  let seasons = [];
+
+  seasonContainer.each(function () {
+    seasons.push(
+      "https://anicloud.io" + $(this).children().first().attr("href")
+    );
+  });
+
+  fs.writeFileSync("json/seasons.json", JSON.stringify(seasons));
+
+  return seasons;
 }
 
 function getAllAnimes() {
   const allAnimeHref = "https://anicloud.io/animes";
 
-  return fetch(allAnimeHref)
-    .then((response) => response.text())
-    .then((data) => {
-      const $ = cheerio.load(data);
+  let fetchData = fetch(allAnimeHref).text();
+  const $ = cheerio.load(fetchData);
 
-      let genresContainer = $("#seriesContainer");
-      let episodeHrefs = [];
-      genresContainer
-        .children()
-        .first()
-        .children("ul")
-        .first()
-        .children()
-        .each(function () {
-          episodeHrefs.push(
-            "https://anicloud.io" +
-              $(this).children().first().attr("href") +
-              "/staffel-1"
-          );
-        });
-      /*
-      genresContainer.children().each(function () {
-        $(this)
-          .children("ul")
-          .first()
-          .children()
-          .each(function () {
-            episodeHrefs.push(
-              "https://anicloud.io" +
-                $(this).children().first().attr("href") +
-                "/staffel-1"
-            );
-          });
+  let genresContainer = $("#seriesContainer");
+  let episodeHrefs = [];
+  genresContainer.children().each(function () {
+    $(this)
+      .children("ul")
+      .first()
+      .children()
+      .each(function () {
+        episodeHrefs.push(
+          "https://anicloud.io" +
+            $(this).children().first().attr("href") +
+            "/staffel-1"
+        );
       });
-      */
-      return episodeHrefs;
-    });
+  });
+
+  fs.writeFileSync("json/episodeHrefs.json", JSON.stringify(episodeHrefs));
+
+  return episodeHrefs;
 }
+
+const allAnime = getAllAnimes();
+
+let allAnimeSeasons = [];
+
+const getAllAnimeSeasonsProgress = new cliProgress.SingleBar(
+  {},
+  cliProgress.Presets.shades_classic
+);
+
+getAllAnimeSeasonsProgress.start(allAnime.length, 0);
+
+allAnime.forEach((e, i) => {
+  allAnimeSeasons = allAnimeSeasons.concat(getAllAnimeSeasons(e));
+  getAllAnimeSeasonsProgress.update(i);
+});
+
+getAllAnimeSeasonsProgress.stop();
 
 let allEpisodeIds = [];
 
-let allAnimeHrefs = await getAllAnimes();
+const getAllEpisodeIdsProgress = new cliProgress.SingleBar(
+  {},
+  cliProgress.Presets.shades_classic
+);
 
-let episodeIds = ["12345"];
+getAllEpisodeIdsProgress.start(allAnimeSeasons.length, 0);
 
-async function getAllEpisodeIds() {
-  allAnimeHrefs.forEach(async (e) => {
-    episodeIds = await getEpisodeIds(e);
-    allEpisodeIds = allEpisodeIds.concat(episodeIds);
-  });
-}
-
-await getAllEpisodeIds();
-
-console.log(allEpisodeIds);
-
-allEpisodeIds.forEach((e) => {
-  setEpisodeSeen(e);
+allAnimeSeasons.forEach((e, i) => {
+  allEpisodeIds = allEpisodeIds.concat(getEpisodeIds(e));
+  getAllEpisodeIdsProgress.update(i);
 });
+getAllEpisodeIdsProgress.stop();
+
+/*const seeAllEpisodeIdsProgress = new cliProgress.SingleBar(
+  {},
+  cliProgress.Presets.shades_classic
+);
+
+seeAllEpisodeIdsProgress.start(allEpisodeIds.length, 0);
+
+allEpisodeIds.forEach((e, i) => {
+  if (setEpisodeSeen(e)) {
+    seeAllEpisodeIdsProgress.update(i);
+  }
+});
+
+seeAllEpisodeIdsProgress.stop();*/
