@@ -2,6 +2,7 @@ import fetch from "sync-fetch";
 import cheerio from "cheerio";
 import cliProgress from "cli-progress";
 import fs from "fs";
+import asnyc from "async";
 
 function getEpisodeIds(href) {
   let fetchData = fetch(href).text();
@@ -17,8 +18,6 @@ function getEpisodeIds(href) {
   episodeListDOM.each(function () {
     episodeIds.push($(this).children().first().attr("data-episode-id"));
   });
-
-  fs.writeFileSync("json/episodeIds.json", JSON.stringify(episodeIds));
 
   return episodeIds;
 }
@@ -93,12 +92,12 @@ function getAllAnimes() {
       });
   });
 
-  fs.writeFileSync("json/episodeHrefs.json", JSON.stringify(episodeHrefs));
-
   return episodeHrefs;
 }
 
-const allAnime = getAllAnimes();
+const allAnime = JSON.parse(
+  fs.readFileSync("./json/episodeHrefs.json", "utf8")
+);
 
 let allAnimeSeasons = [];
 
@@ -113,6 +112,8 @@ allAnime.forEach((e, i) => {
   allAnimeSeasons = allAnimeSeasons.concat(getAllAnimeSeasons(e));
   getAllAnimeSeasonsProgress.update(i);
 });
+
+fs.writeFileSync("json/episodeHrefs.json", JSON.stringify(allAnimeSeasons));
 
 getAllAnimeSeasonsProgress.stop();
 
@@ -130,6 +131,7 @@ allAnimeSeasons.forEach((e, i) => {
   getAllEpisodeIdsProgress.update(i);
 });
 getAllEpisodeIdsProgress.stop();
+fs.writeFileSync("json/episodeIds.json", JSON.stringify(episodeIds));
 
 /*const seeAllEpisodeIdsProgress = new cliProgress.SingleBar(
   {},
